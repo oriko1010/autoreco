@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -19,15 +20,19 @@ const (
 	exit
 )
 
-func server(messages chan message, stdin io.Writer) {
-	tapBottomRight := []byte(fmt.Sprintf("input tap %v %v\n", 1920-100, 1080-100))
+var (
+	x = flag.Int("x", 1920-100, "x coordinate")
+	y = flag.Int("y", 1080-100, "y coordinate")
+)
 
+func server(messages <-chan message, stdin io.Writer) {
+	tapCmd := []byte(fmt.Sprintf("input tap %v %v\n", *x, *y))
 	tap := func() {
-		_, err := stdin.Write(tapBottomRight)
+		_, err := stdin.Write(tapCmd)
 		if err != nil {
 			log.Fatalln(err)
 		}
-		log.Println("Tapped")
+		log.Printf("Tapped (%v, %v)\n", *x, *y)
 	}
 
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -47,7 +52,10 @@ func server(messages chan message, stdin io.Writer) {
 				tapping = false
 			case exit:
 				log.Println("Exiting.")
-				stdin.Write([]byte("exit"))
+				_, err := stdin.Write([]byte("exit\n"))
+				if err != nil {
+					log.Fatalln(err)
+				}
 				return
 			}
 		case <-time.After(delay):
@@ -58,7 +66,7 @@ func server(messages chan message, stdin io.Writer) {
 	}
 }
 
-func input(messages chan message) {
+func input(messages chan<- message) {
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
 		switch text := scanner.Text(); text {
@@ -80,6 +88,8 @@ func input(messages chan message) {
 }
 
 func main() {
+	flag.Parse()
+
 	adb := exec.Command("adb", "shell")
 	stdin, err := adb.StdinPipe()
 	if err != nil {
